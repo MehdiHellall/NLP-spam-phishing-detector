@@ -1,15 +1,29 @@
 export type ThreatLabel = "ham" | "phish" | "spam";
 export type RiskLevel = "low" | "medium" | "high";
 
-export type Prediction = {
+export type ModelPrediction = {
   label: ThreatLabel;
+  confidence: number | null;
   probabilities: Record<ThreatLabel, number> | null;
-  risk_level: RiskLevel;
-  explanation: string;
-  suggested_action: string;
 };
 
-export type Health = {
+export type Prediction = {
+  final_label: ThreatLabel;
+  final_risk_level: RiskLevel;
+  final_confidence: number | null;
+  model_outputs: {
+    tfidf_logreg: ModelPrediction;
+  };
+  explanation: string;
+  suggested_action: string;
+  artifact_metadata: {
+    artifact: string | null;
+    model_name: string | null;
+    metrics_file: string | null;
+  };
+};
+
+export type Readiness = {
   status: "ok" | "error";
   model_loaded: boolean;
   model_path: string | null;

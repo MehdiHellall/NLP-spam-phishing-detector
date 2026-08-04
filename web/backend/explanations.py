@@ -1,0 +1,78 @@
+"""Transparent analyst guidance derived from a model prediction."""
+
+from __future__ import annotations
+
+import re
+
+from web.backend.schemas import RiskLevel
+
+TRANSPARENT_SIGNALS = {
+    "urgency": re.compile(r"\b(urgent|immediately|expires?|suspended|locked|final notice)\b", re.I),
+    "credential request": re.compile(
+        r"\b(password|passcode|login|verify|verification|credentials?|account)\b",
+        re.I,
+    ),
+    "money or prize language": re.compile(
+        r"\b(free|prize|winner|cash|coupon|discount|limited offer|buy now)\b",
+        re.I,
+    ),
+    "link or contact prompt": re.compile(
+        r"(https?://|www\.|\bclick\b|\breply\b|\bcall\b)",
+        re.I,
+    ),
+}
+
+
+def confidence_for(label: str, probabilities: dict[str, float] | None) -> float | None:
+    """Return the probability assigned to the selected label, when available."""
+    if probabilities is None:
+        return None
+    return probabilities.get(label)
+
+
+def risk_level_for(label: str, probabilities: dict[str, float] | None) -> RiskLevel:
+    """Map the existing label and confidence behavior to an analyst risk level."""
+    confidence = confidence_for(label, probabilities)
+    if confidence is not None and confidence < 0.55:
+        return "medium"
+    if label == "phish":
+        return "high"
+    if label == "spam":
+        return "medium"
+    return "low"
+
+
+def matched_signals(text: str) -> list[str]:
+    """Return deterministic text signals used only to explain the model output."""
+    return [name for name, pattern in TRANSPARENT_SIGNALS.items() if pattern.search(text)]
+
+
+def explanation_for(label: str, probabilities: dict[str, float] | None, text: str) -> str:
+    """Describe the artifact-backed result without claiming model internals we do not expose."""
+    confidence = confidence_for(label, probabilities)
+    confidence_text = f" with {confidence:.0%} confidence" if confidence is not None else ""
+    signals = matched_signals(text)
+    if signals:
+        signal_text = ", ".join(signals[:3])
+        return (
+            f"The trained model classified this message as {label}{confidence_text}. "
+            f"Transparent text signals observed: {signal_text}."
+        )
+    return (
+        f"The trained model classified this message as {label}{confidence_text}. "
+        "No obvious keyword signal dominated the explanation, so treat the score as model-driven."
+    )
+
+
+def suggested_action_for(label: str, risk_level: RiskLevel) -> str:
+    """Return conservative handling guidance for the current result."""
+    if label == "phish":
+        return (
+            "Do not click links or share credentials. Verify the request through a trusted "
+            "channel and report it to your security team."
+        )
+    if label == "spam":
+        return "Avoid engaging with the sender. Mark it as spam or delete it if it is unsolicited."
+    if risk_level == "medium":
+        return "Review the sender and context before acting; the model confidence is not decisive."
+    return "Low apparent risk. Continue normal handling, while still checking sender context."

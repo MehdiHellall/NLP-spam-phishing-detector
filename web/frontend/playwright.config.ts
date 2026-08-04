@@ -29,7 +29,7 @@ const webServers = useExistingServers
   : [
       {
         command: "node scripts/start-backend.mjs",
-        url: `${backendUrl}/health`,
+        url: `${backendUrl}/v1/ready`,
         reuseExistingServer: !process.env.CI,
         timeout: 180_000,
       },

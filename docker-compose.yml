@@ -8,6 +8,8 @@ services:
       EMAIL_THREAT_MODEL_URL: ${EMAIL_THREAT_MODEL_URL:-}
       EMAIL_THREAT_MODEL_SHA256: ${EMAIL_THREAT_MODEL_SHA256:-}
       EMAIL_THREAT_MODEL_CACHE_PATH: ${EMAIL_THREAT_MODEL_CACHE_PATH:-/tmp/threatlens/model.joblib}
+      EMAIL_THREAT_MODEL_RETRY_SECONDS: ${EMAIL_THREAT_MODEL_RETRY_SECONDS:-30}
+      EMAIL_THREAT_MAX_ARTIFACT_BYTES: ${EMAIL_THREAT_MAX_ARTIFACT_BYTES:-1073741824}
       EMAIL_THREAT_BACKGROUND_WARMUP: ${EMAIL_THREAT_BACKGROUND_WARMUP:-true}
       EMAIL_THREAT_RATE_LIMIT_PER_MINUTE: ${EMAIL_THREAT_RATE_LIMIT_PER_MINUTE:-60}
       EMAIL_THREAT_MAX_BODY_BYTES: ${EMAIL_THREAT_MAX_BODY_BYTES:-16384}
@@ -21,7 +23,7 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/live', timeout=3).read()"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/live', timeout=3).read()"
       interval: 30s
       timeout: 5s
       retries: 3
