@@ -9,7 +9,6 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY src ./src
-COPY reports ./reports
 COPY artifacts/tfidf_logreg.joblib ./artifacts/tfidf_logreg.joblib
 COPY web/__init__.py ./web/__init__.py
 COPY web/backend ./web/backend

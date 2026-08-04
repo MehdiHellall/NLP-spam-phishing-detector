@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from email_threat_detector.inference import save_model
 from web.backend import main as backend_main
 from web.backend.main import AppSettings, create_app
+from web.backend.model import save_model
 
 
 class PicklableThreatModel:

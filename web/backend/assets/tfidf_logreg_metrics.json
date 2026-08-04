@@ -1,0 +1,12 @@
+{
+  "model_name": "tfidf_logreg",
+  "data_summary": {
+    "modeling_rows": 128514
+  },
+  "metrics": {
+    "test": {
+      "accuracy": 0.9575941487706193,
+      "f1_macro": 0.9575747388794594
+    }
+  }
+}

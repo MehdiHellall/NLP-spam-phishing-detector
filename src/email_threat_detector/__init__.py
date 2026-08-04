@@ -1,4 +1,4 @@
-"""Reusable utilities for spam and phishing message classification."""
+"""Compatibility package required by the packaged sklearn artifact."""
 
 __all__ = ["__version__"]
 

@@ -1,13 +1,6 @@
-"""Project constants and label mapping helpers."""
+"""Threat label helpers used by the API."""
 
 from __future__ import annotations
-
-from collections.abc import Iterable
-
-TEXT_COLUMN = "text"
-LABEL_COLUMN = "label"
-DEFAULT_RANDOM_SEED = 42
-DEFAULT_DATASET_SLUG = "akshatsharma2/the-biggest-spam-ham-phish-email-dataset-300000"
 
 LABEL_TO_ID = {
     "ham": 0,
@@ -31,7 +24,7 @@ LABEL_ALIASES = {
 
 
 def normalize_label(value: object) -> str:
-    """Return the canonical label name for a dataset label value."""
+    """Return the canonical label name."""
     if value is None:
         raise ValueError("Label cannot be None.")
 
@@ -51,8 +44,3 @@ def normalize_label(value: object) -> str:
         return LABEL_ALIASES[normalized]
 
     raise ValueError(f"Unknown label: {value!r}")
-
-
-def labels_to_ids(values: Iterable[object]) -> list[int]:
-    """Map labels to stable integer ids."""
-    return [LABEL_TO_ID[normalize_label(value)] for value in values]

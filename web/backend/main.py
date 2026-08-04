@@ -24,8 +24,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from email_threat_detector.constants import LABEL_NAMES, normalize_label
-from email_threat_detector.inference import ThreatClassifier, load_model
+from web.backend.labels import LABEL_NAMES, normalize_label
+from web.backend.model import ThreatClassifier, load_model
 
 MODEL_PATH_ENV = "EMAIL_THREAT_MODEL_PATH"
 MODEL_URL_ENV = "EMAIL_THREAT_MODEL_URL"
@@ -35,7 +35,7 @@ BACKGROUND_WARMUP_ENV = "EMAIL_THREAT_BACKGROUND_WARMUP"
 ALLOWED_ORIGINS_ENV = "EMAIL_THREAT_ALLOWED_ORIGINS"
 RATE_LIMIT_PER_MINUTE_ENV = "EMAIL_THREAT_RATE_LIMIT_PER_MINUTE"
 MAX_BODY_BYTES_ENV = "EMAIL_THREAT_MAX_BODY_BYTES"
-DEFAULT_METRICS_PATH = Path("reports/metrics/tfidf_logreg_metrics.json")
+DEFAULT_METRICS_PATH = Path(__file__).resolve().parent / "assets" / "tfidf_logreg_metrics.json"
 DEFAULT_MODEL_CACHE_PATH = Path("/tmp/threatlens/model.joblib")
 DEFAULT_ALLOWED_ORIGINS = (
     "http://localhost:5173",
