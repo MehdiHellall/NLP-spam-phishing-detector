@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true,
+    "outDir": "./node_modules/.tsbuild/node",
+    "tsBuildInfoFile": "./node_modules/.tsbuild/tsconfig.node.tsbuildinfo",
+    "strict": true
+  },
+  "include": ["vite.config.ts", "tailwind.config.ts"]
+}

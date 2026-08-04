@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: web/backend/Dockerfile
+    environment:
+      EMAIL_THREAT_MODEL_PATH: ${EMAIL_THREAT_MODEL_PATH:-artifacts/tfidf_logreg.joblib}
+      EMAIL_THREAT_MODEL_URL: ${EMAIL_THREAT_MODEL_URL:-}
+      EMAIL_THREAT_MODEL_SHA256: ${EMAIL_THREAT_MODEL_SHA256:-}
+      EMAIL_THREAT_MODEL_CACHE_PATH: ${EMAIL_THREAT_MODEL_CACHE_PATH:-/tmp/threatlens/model.joblib}
+      EMAIL_THREAT_BACKGROUND_WARMUP: ${EMAIL_THREAT_BACKGROUND_WARMUP:-true}
+      EMAIL_THREAT_ALLOWED_ORIGINS: ${EMAIL_THREAT_ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/live', timeout=3).read()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: web/frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"

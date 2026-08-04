@@ -1,0 +1,136 @@
+name: Web app
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: ThreatLens web app
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository with LFS artifacts
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Verify LFS model artifact
+        run: |
+          python - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+
+          expected = "d9ed306935e26c9bf7b285a861991bb3539be7089ad9d8bf798d781d01d45981"
+          path = Path("artifacts/tfidf_logreg.joblib")
+          if not path.is_file():
+              raise SystemExit(f"Missing model artifact: {path}")
+
+          digest = sha256()
+          with path.open("rb") as file:
+              for chunk in iter(lambda: file.read(1024 * 1024), b""):
+                  digest.update(chunk)
+
+          actual = digest.hexdigest()
+          if actual != expected:
+              raise SystemExit(f"Model artifact SHA-256 mismatch: {actual}")
+          PY
+
+      - name: Install backend dependencies
+        run: python -m pip install -e ".[dev,web]"
+
+      - name: Install frontend dependencies
+        working-directory: web/frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint frontend
+        working-directory: web/frontend
+        run: pnpm lint
+
+      - name: Build frontend
+        working-directory: web/frontend
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8787
+        run: pnpm build
+
+      - name: Install Playwright browser
+        working-directory: web/frontend
+        run: pnpm test:e2e:install
+
+      - name: Run artifact-backed E2E
+        working-directory: web/frontend
+        env:
+          EMAIL_THREAT_MODEL_PATH: ${{ github.workspace }}/artifacts/tfidf_logreg.joblib
+          E2E_FRONTEND_MODE: preview
+        run: pnpm test:e2e
+
+      - name: Run Docker compose smoke test
+        env:
+          VITE_API_BASE_URL: http://localhost:8000
+        run: |
+          set -euo pipefail
+          trap 'docker compose down' EXIT
+          docker compose up --build -d
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+
+          def get_json(url: str) -> dict[str, object]:
+              with urllib.request.urlopen(url, timeout=10) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          deadline = time.time() + 180
+          last_error: Exception | None = None
+          while time.time() < deadline:
+              try:
+                  live = get_json("http://127.0.0.1:8000/live")
+                  health = get_json("http://127.0.0.1:8000/health")
+                  if live["status"] == "ok" and health["model_loaded"] is True:
+                      break
+              except Exception as exc:
+                  last_error = exc
+              time.sleep(3)
+          else:
+              raise SystemExit(f"Docker backend did not become ready: {last_error}")
+
+          payload = json.dumps(
+              {"text": "Urgent password reset required verify account."}
+          ).encode("utf-8")
+          request = urllib.request.Request(
+              "http://127.0.0.1:8000/predict",
+              data=payload,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              prediction = json.loads(response.read().decode("utf-8"))
+          if prediction["label"] not in {"ham", "phish", "spam"}:
+              raise SystemExit(f"Unexpected prediction label: {prediction}")
+
+          with urllib.request.urlopen("http://127.0.0.1:8080/", timeout=10) as response:
+              if response.status != 200:
+                  raise SystemExit(f"Frontend returned {response.status}")
+          PY
+          cd web/frontend
+          E2E_BASE_URL=http://127.0.0.1:8080 pnpm test:e2e

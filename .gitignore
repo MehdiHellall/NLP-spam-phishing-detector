@@ -17,6 +17,11 @@ build/
 dist/
 *.egg-info/
 .eggs/
+node_modules/
+web/frontend/dist/
+web/frontend/playwright-report/
+web/frontend/test-results/
+*.tsbuildinfo
 
 # Tests and quality
 .pytest_cache/
@@ -35,7 +40,9 @@ data/raw/
 data/processed/
 data/interim/
 models/
-artifacts/
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/tfidf_logreg.joblib
 mlruns/
 results/
 outputs/
