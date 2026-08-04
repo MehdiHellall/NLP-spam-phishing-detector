@@ -8,8 +8,7 @@ ThreatLens is a web app that classifies messages as:
 
 The first screen is the classifier itself: model readiness, a message input, the prediction,
 confidence and class probabilities, an explanation, a suggested action, and compact artifact
-metadata. The UI intentionally has no example-message controls, marketing sections, or simulated
-model claims.
+metadata.
 
 ## Results
 
@@ -18,8 +17,6 @@ The packaged model is `artifacts/tfidf_logreg.joblib`.
 | Model | Test accuracy | Test macro F1 |
 | --- | ---: | ---: |
 | TF-IDF + Logistic Regression | `95.76%` | `95.76%` |
-
-The frontend reads these metrics from the backend asset at `web/backend/assets/tfidf_logreg_metrics.json`.
 
 ## Repository Map
 
@@ -37,10 +34,6 @@ src/email_threat_detector/   Compatibility module required by the artifact
 notebooks/                   Source notebooks
 tests/                       Backend API and real-artifact regression tests
 ```
-
-The backend modules separate HTTP concerns from artifact-backed inference. Both API generations
-use the same TF-IDF + Logistic Regression runtime; the refactor does not replace the trained model
-with rules, fixtures, or mock output.
 
 ## Setup
 
