@@ -48,13 +48,16 @@ dev = [
   "ruff>=0.8",
 ]
 
+[project.scripts]
+email-threat-detector = "email_threat_detector.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/email_threat_detector"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
-addopts = "-q"
+pythonpath = [".", "src"]
+addopts = "-q --basetemp=.pytest-tmp --cov=src/email_threat_detector --cov=app --cov-report=term-missing --cov-fail-under=80"
 
 [tool.ruff]
 line-length = 100
@@ -75,3 +78,11 @@ select = [
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["src/email_threat_detector", "app"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

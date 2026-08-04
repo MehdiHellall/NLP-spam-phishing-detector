@@ -1,4 +1,4 @@
-"""Utilities for spam and phishing message classification."""
+"""Reusable utilities for spam and phishing message classification."""
 
 __all__ = ["__version__"]
 

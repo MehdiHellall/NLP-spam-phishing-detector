@@ -1,0 +1,67 @@
+{
+  "metrics": {
+    "epoch": 1.0,
+    "test_accuracy": 0.9509025832555245,
+    "test_f1_macro": 0.9508488069137163,
+    "test_loss": 0.15361489355564117,
+    "test_precision_macro": 0.9508083116966625,
+    "test_recall_macro": 0.9509025832555243,
+    "test_runtime": 29.1468,
+    "test_samples_per_second": 440.94,
+    "test_steps_per_second": 6.896
+  },
+  "model_name": "google/bert_uncased_L-2_H-128_A-2",
+  "notes": [
+    "Transformer model was fine-tuned on prepared balanced real-data split CSVs.",
+    "Classifier head is initialized for the three project labels."
+  ],
+  "split_manifest": {
+    "data_summary": {
+      "class_counts": {
+        "test": {
+          "ham": 4284,
+          "phish": 4284,
+          "spam": 4284
+        },
+        "train": {
+          "ham": 34270,
+          "phish": 34270,
+          "spam": 34270
+        },
+        "validation": {
+          "ham": 4284,
+          "phish": 4284,
+          "spam": 4284
+        }
+      },
+      "clean_rows": 278971,
+      "conflicting_text_groups_removed": 14,
+      "data_config": {
+        "balance_classes": true,
+        "random_state": 42,
+        "samples_per_class": null,
+        "test_size": 0.1,
+        "validation_size": 0.1
+      },
+      "duplicate_text_groups": 15,
+      "input_rows": 365448,
+      "modeling_rows": 128514
+    },
+    "dataset": {
+      "filename": "df.csv",
+      "source": "akshatsharma2/the-biggest-spam-ham-phish-email-dataset-300000"
+    },
+    "notes": [
+      "These split files use the same cleanup, conflict removal, balancing, and split logic as the baseline pipeline.",
+      "Use these files as the input contract for transformer fine-tuning."
+    ],
+    "output_dir": "data\\processed\\transformer_full"
+  },
+  "training_config": {
+    "batch_size": 64,
+    "epochs": 1.0,
+    "learning_rate": 5e-05,
+    "max_length": 128,
+    "random_state": 42
+  }
+}

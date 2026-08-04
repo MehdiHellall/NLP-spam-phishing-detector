@@ -1,0 +1,15 @@
+name: tfidf_logreg
+command: train-baseline
+dataset:
+  source: akshatsharma2/the-biggest-spam-ham-phish-email-dataset-300000
+  file: df.csv
+model:
+  name: tfidf_logreg
+split:
+  seed: 42
+  balance_classes: true
+  validation_size: 0.1
+  test_size: 0.1
+outputs:
+  metrics: reports/metrics/tfidf_logreg_metrics.json
+  figure: reports/figures/tfidf_logreg_test_confusion_matrix.png
