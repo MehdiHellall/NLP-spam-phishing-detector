@@ -4,11 +4,13 @@ services:
       context: .
       dockerfile: web/backend/Dockerfile
     environment:
-      EMAIL_THREAT_MODEL_PATH: ${EMAIL_THREAT_MODEL_PATH:-artifacts/tfidf_logreg.joblib}
+      EMAIL_THREAT_MODEL_PATH: ${EMAIL_THREAT_MODEL_PATH-artifacts/tfidf_logreg.joblib}
       EMAIL_THREAT_MODEL_URL: ${EMAIL_THREAT_MODEL_URL:-}
       EMAIL_THREAT_MODEL_SHA256: ${EMAIL_THREAT_MODEL_SHA256:-}
       EMAIL_THREAT_MODEL_CACHE_PATH: ${EMAIL_THREAT_MODEL_CACHE_PATH:-/tmp/threatlens/model.joblib}
       EMAIL_THREAT_BACKGROUND_WARMUP: ${EMAIL_THREAT_BACKGROUND_WARMUP:-true}
+      EMAIL_THREAT_RATE_LIMIT_PER_MINUTE: ${EMAIL_THREAT_RATE_LIMIT_PER_MINUTE:-60}
+      EMAIL_THREAT_MAX_BODY_BYTES: ${EMAIL_THREAT_MAX_BODY_BYTES:-16384}
       EMAIL_THREAT_ALLOWED_ORIGINS: ${EMAIL_THREAT_ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
     ports:
       - "8000:8000"
@@ -35,4 +37,4 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "8080:80"
+      - "8080:8080"

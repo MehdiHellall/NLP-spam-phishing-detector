@@ -110,6 +110,7 @@ $env:EMAIL_THREAT_BACKGROUND_WARMUP = "true"
 ```
 
 The backend downloads the artifact once, verifies the required SHA-256 checksum, caches it, and then loads it through the same `ThreatClassifier` path used for local artifacts. Remote joblib artifacts without a checksum are rejected because joblib uses Python pickle internally.
+Configure only one artifact source at a time. For Docker or Compose deployments that use `EMAIL_THREAT_MODEL_URL`, set `EMAIL_THREAT_MODEL_PATH` to an empty value so the image's local artifact default does not compete with the remote source.
 
 Useful backend endpoints:
 
@@ -131,7 +132,7 @@ $env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
 pnpm dev
 ```
 
-Open `http://127.0.0.1:5173/`, paste a message, and select **Analyze**. The frontend reads real model metadata and committed metrics from the backend. If the artifact is unavailable, `/health` returns a service error and `/predict` returns `503` instead of producing a fake result.
+Open [ThreatLens](http://127.0.0.1:5173/), paste a message, and select **Analyze**. The frontend reads real model metadata and committed metrics from the backend. If the artifact is unavailable, `/health` returns a service error and `/predict` returns `503` instead of producing a fake result.
 
 For local checks:
 
@@ -161,10 +162,8 @@ The backend image copies `artifacts/tfidf_logreg.joblib` from Git LFS and defaul
 
 The compose stack serves:
 
-```text
-Frontend: http://localhost:8080
-Backend:  http://localhost:8000
-```
+- [ThreatLens](http://localhost:8080)
+- [ThreatLens API](http://localhost:8000/health)
 
 For an open-source repository with the model artifact included, use Git LFS instead of regular Git blobs:
 
@@ -181,7 +180,7 @@ oid sha256:d9ed306935e26c9bf7b285a861991bb3539be7089ad9d8bf798d781d01d45981
 size 270487147
 ```
 
-For cloud platforms, deploy `web/backend/Dockerfile` as the API service and `web/frontend/Dockerfile` as the static frontend service. Point platform health checks at `/live`. Set `VITE_API_BASE_URL` to the public backend URL when building the frontend; production builds intentionally fail when it is missing. Set either `EMAIL_THREAT_MODEL_PATH` for the in-image or mounted LFS artifact, or `EMAIL_THREAT_MODEL_URL` plus `EMAIL_THREAT_MODEL_SHA256` for a remote artifact. Set `EMAIL_THREAT_ALLOWED_ORIGINS` to the deployed frontend origin.
+For cloud platforms, deploy `web/backend/Dockerfile` as the API service and `web/frontend/Dockerfile` as the static frontend service. Point platform health checks at `/live`. Set `VITE_API_BASE_URL` to the public backend origin when building the frontend; production builds intentionally fail when it is missing or when a non-loopback origin uses plain HTTP. Set either `EMAIL_THREAT_MODEL_PATH` for the in-image or mounted LFS artifact, or `EMAIL_THREAT_MODEL_URL` plus `EMAIL_THREAT_MODEL_SHA256` for a remote artifact. Set `EMAIL_THREAT_ALLOWED_ORIGINS` to the deployed frontend origin.
 
 The `Web app` GitHub Actions workflow checks out LFS files, verifies the committed model artifact checksum, builds the frontend with an explicit API origin, runs the artifact-backed Playwright E2E suite against the built static app, and smoke-tests the Docker Compose stack.
 

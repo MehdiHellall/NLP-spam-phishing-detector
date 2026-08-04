@@ -7,9 +7,11 @@ import os
 import re
 import shutil
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import deque
 from dataclasses import dataclass
 from hashlib import sha256
 from ipaddress import ip_address
@@ -31,6 +33,8 @@ MODEL_SHA256_ENV = "EMAIL_THREAT_MODEL_SHA256"
 MODEL_CACHE_PATH_ENV = "EMAIL_THREAT_MODEL_CACHE_PATH"
 BACKGROUND_WARMUP_ENV = "EMAIL_THREAT_BACKGROUND_WARMUP"
 ALLOWED_ORIGINS_ENV = "EMAIL_THREAT_ALLOWED_ORIGINS"
+RATE_LIMIT_PER_MINUTE_ENV = "EMAIL_THREAT_RATE_LIMIT_PER_MINUTE"
+MAX_BODY_BYTES_ENV = "EMAIL_THREAT_MAX_BODY_BYTES"
 DEFAULT_METRICS_PATH = Path("reports/metrics/tfidf_logreg_metrics.json")
 DEFAULT_MODEL_CACHE_PATH = Path("/tmp/threatlens/model.joblib")
 DEFAULT_ALLOWED_ORIGINS = (
@@ -40,6 +44,8 @@ DEFAULT_ALLOWED_ORIGINS = (
     "http://127.0.0.1:4173",
 )
 MAX_TEXT_CHARS = 5_000
+DEFAULT_MAX_BODY_BYTES = 16_384
+DEFAULT_RATE_LIMIT_PER_MINUTE = 60
 PUBLIC_METADATA_KEYS = frozenset(
     {
         "model_name",
@@ -58,6 +64,13 @@ TRANSPARENT_SIGNALS = {
     ),
     "link or contact prompt": re.compile(r"(https?://|www\.|\bclick\b|\breply\b|\bcall\b)", re.I),
 }
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cache-Control": "no-store",
+}
 
 RiskLevel = Literal["low", "medium", "high"]
 ThreatLabel = Literal["ham", "phish", "spam"]
@@ -75,6 +88,8 @@ class AppSettings:
     metrics_path: Path = DEFAULT_METRICS_PATH
     allowed_origins: tuple[str, ...] = DEFAULT_ALLOWED_ORIGINS
     max_text_chars: int = MAX_TEXT_CHARS
+    max_body_bytes: int = DEFAULT_MAX_BODY_BYTES
+    rate_limit_per_minute: int = DEFAULT_RATE_LIMIT_PER_MINUTE
 
     @classmethod
     def from_env(cls) -> AppSettings:
@@ -100,6 +115,14 @@ class AppSettings:
             background_warmup=os.getenv(BACKGROUND_WARMUP_ENV, "").casefold()
             in {"1", "true", "yes"},
             allowed_origins=origins,
+            max_body_bytes=_positive_int_from_env(
+                MAX_BODY_BYTES_ENV,
+                DEFAULT_MAX_BODY_BYTES,
+            ),
+            rate_limit_per_minute=_positive_int_from_env(
+                RATE_LIMIT_PER_MINUTE_ENV,
+                DEFAULT_RATE_LIMIT_PER_MINUTE,
+            ),
         )
 
 
@@ -119,6 +142,30 @@ class ModelState:
 
 class ModelArtifactError(RuntimeError):
     """Raised when an artifact cannot be resolved for model loading."""
+
+
+class RequestRateLimiter:
+    """Small per-process fixed-window limiter for unauthenticated inference calls."""
+
+    def __init__(self, limit_per_minute: int) -> None:
+        self._limit_per_minute = limit_per_minute
+        self._lock = threading.Lock()
+        self._requests_by_client: dict[str, deque[float]] = {}
+
+    def allow(self, client_id: str, now: float | None = None) -> bool:
+        if self._limit_per_minute <= 0:
+            return True
+
+        current_time = now if now is not None else time.monotonic()
+        window_start = current_time - 60
+        with self._lock:
+            timestamps = self._requests_by_client.setdefault(client_id, deque())
+            while timestamps and timestamps[0] < window_start:
+                timestamps.popleft()
+            if len(timestamps) >= self._limit_per_minute:
+                return False
+            timestamps.append(current_time)
+            return True
 
 
 class HealthResponse(BaseModel):
@@ -165,6 +212,18 @@ class PredictResponse(BaseModel):
     risk_level: RiskLevel
     explanation: str
     suggested_action: str
+
+
+def _positive_int_from_env(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        parsed_value = int(raw_value)
+    except ValueError:
+        return default
+    return max(parsed_value, 0)
 
 
 def _resolve_local_path(path: Path) -> Path:
@@ -243,6 +302,12 @@ def _download_model_artifact(url: str, destination: Path) -> Path:
 
 
 def _resolve_model_artifact(settings: AppSettings) -> tuple[Path | None, str | None]:
+    if settings.model_path is not None and settings.model_url is not None:
+        return (
+            _resolve_local_path(settings.model_path),
+            f"Configure only one of {MODEL_PATH_ENV} or {MODEL_URL_ENV}.",
+        )
+
     if settings.model_path is not None:
         model_path = _resolve_local_path(settings.model_path)
         if not model_path.is_file():
@@ -461,10 +526,48 @@ def _health_response(state: ModelState) -> HealthResponse:
     )
 
 
+def _client_id(request: Request) -> str:
+    if request.client is None:
+        return "unknown"
+    return request.client.host
+
+
+def _content_length(request: Request) -> int | None:
+    raw_content_length = request.headers.get("content-length")
+    if raw_content_length is None:
+        return None
+    try:
+        return int(raw_content_length)
+    except ValueError:
+        return -1
+
+
+def _too_large_response(settings: AppSettings) -> JSONResponse:
+    return JSONResponse(
+        status_code=413,
+        content={"detail": f"Request body must be {settings.max_body_bytes} bytes or fewer."},
+    )
+
+
+def _length_required_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=411,
+        content={"detail": "Content-Length is required for prediction requests."},
+    )
+
+
+def _rate_limited_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many prediction requests. Please wait and try again."},
+    )
+
+
 def create_app(settings: AppSettings | None = None) -> FastAPI:
     """Create the ThreatLens API app."""
     app_settings = settings or AppSettings.from_env()
     model_service = ModelService(app_settings)
+    rate_limiter = RequestRateLimiter(app_settings.rate_limit_per_minute)
     metrics = _load_metrics(app_settings.metrics_path)
 
     app = FastAPI(
@@ -484,6 +587,25 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.state.metrics = metrics
     if app_settings.background_warmup:
         model_service.start_background_warmup()
+
+    @app.middleware("http")
+    async def enforce_request_guards(request: Request, call_next):
+        if request.url.path == "/predict" and request.method.upper() == "POST":
+            content_length = _content_length(request)
+            if content_length is None:
+                response = _length_required_response()
+            elif content_length < 0 or content_length > app_settings.max_body_bytes:
+                response = _too_large_response(app_settings)
+            elif not rate_limiter.allow(_client_id(request)):
+                response = _rate_limited_response()
+            else:
+                response = await call_next(request)
+        else:
+            response = await call_next(request)
+
+        for header, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(header, value)
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(

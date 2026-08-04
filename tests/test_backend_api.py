@@ -107,6 +107,15 @@ def test_live_does_not_require_model_artifact(tmp_path: Path) -> None:
     }
 
 
+def test_api_responses_include_security_headers(artifact_path: Path) -> None:
+    response = _client(artifact_path).get("/health")
+
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Cache-Control"] == "no-store"
+
+
 def test_predict_rejects_missing_and_empty_text(artifact_path: Path) -> None:
     client = _client(artifact_path)
 
@@ -116,6 +125,51 @@ def test_predict_rejects_missing_and_empty_text(artifact_path: Path) -> None:
     assert missing.status_code == 422
     assert empty.status_code == 422
     assert empty.json()["detail"] == "text must not be empty."
+
+
+def test_predict_rejects_oversized_request_before_prediction(artifact_path: Path) -> None:
+    app = create_app(AppSettings(model_path=artifact_path, max_body_bytes=16))
+    client = TestClient(app)
+
+    response = client.post("/predict", json={"text": "verify account password"})
+
+    assert response.status_code == 413
+    assert "16 bytes or fewer" in response.json()["detail"]
+
+
+def test_predict_preflight_is_not_blocked_by_body_guards(artifact_path: Path) -> None:
+    client = TestClient(
+        create_app(
+            AppSettings(
+                model_path=artifact_path,
+                allowed_origins=("http://localhost:8080",),
+            )
+        )
+    )
+
+    response = client.options(
+        "/predict",
+        headers={
+            "Origin": "http://localhost:8080",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:8080"
+
+
+def test_predict_rate_limits_repeated_requests(artifact_path: Path) -> None:
+    app = create_app(AppSettings(model_path=artifact_path, rate_limit_per_minute=1))
+    client = TestClient(app)
+
+    first = client.post("/predict", json={"text": "verify account"})
+    second = client.post("/predict", json={"text": "verify account"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert "Too many prediction requests" in second.json()["detail"]
 
 
 def test_predict_returns_real_classifier_result(artifact_path: Path) -> None:
@@ -180,6 +234,27 @@ def test_remote_model_url_is_downloaded_verified_and_cached(
     assert response.status_code == 200
     assert response.json()["label"] == "phish"
     assert cache_path.is_file()
+
+
+def test_model_configuration_rejects_path_and_url_together(
+    artifact_path: Path,
+    artifact_server,
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        AppSettings(
+            model_path=artifact_path,
+            model_url=artifact_server["url"],
+            model_sha256=artifact_server["sha256"],
+            model_cache_path=tmp_path / "cache" / "model.joblib",
+        )
+    )
+    client = TestClient(app)
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    assert "Configure only one" in response.json()["detail"]
 
 
 def test_remote_model_url_requires_checksum(tmp_path: Path) -> None:
